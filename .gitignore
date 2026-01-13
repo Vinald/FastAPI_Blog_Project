@@ -150,6 +150,7 @@ celerybeat.pid
 
 # Environments
 .env
+# Note: .env is ignored to avoid committing DB credentials.
 .envrc
 .venv
 env/

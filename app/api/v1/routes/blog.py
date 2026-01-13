@@ -1,13 +1,13 @@
 from fastapi import APIRouter, Depends, HTTPException, status
-
+from app.schemas.blog import BlogPost
 
 blog_route = APIRouter(prefix="/blogs", tags=["Blogs"])
 
 
 # create a blog
 @blog_route.post("/")
-async def create_blog():
-    pass
+async def create_blog(request: BlogPost):
+    return request
 
 
 # get all blogs
