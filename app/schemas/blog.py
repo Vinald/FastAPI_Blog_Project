@@ -1,5 +1,10 @@
 from pydantic import BaseModel
 
-class BlogPost(BaseModel):
+class BlogBase(BaseModel):
     title: str
     content: str
+    published: bool | None = None
+    
+    
+class BlogPost(BlogBase):
+    pass
