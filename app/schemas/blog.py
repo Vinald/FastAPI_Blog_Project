@@ -6,5 +6,11 @@ class BlogBase(BaseModel):
     published: bool | None = None
     
     
+class BlogShow(BlogBase):
+    id: int
+
+    class Config:
+        orm_mode = True
+
 class BlogPost(BlogBase):
     pass
