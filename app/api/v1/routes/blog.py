@@ -9,7 +9,7 @@ blog_route = APIRouter(prefix="/blogs", tags=["Blogs"])
 # create a blog
 @blog_route.post("/")
 async def create_blog(request: BlogPost):
-    return blog_services.create_blog()
+    return blog_services.create_blog(request)
 
 
 # get all blogs

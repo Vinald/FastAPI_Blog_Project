@@ -28,7 +28,7 @@ BLOG_DATA = [
 ]
 
 def create_blog(blog_data: BlogPost):
-    new_blog = blog_data.dict()
+    new_blog = blog_data.model_dump()
     new_blog["id"] = len(BLOG_DATA) + 1
     BLOG_DATA.append(new_blog)
     return BlogPost(**new_blog)
