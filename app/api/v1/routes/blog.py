@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, status
-from app.schemas.blog import BlogPost, BlogShow
+from app.schemas.blog import BlogPost, ShowBlog
 from app.services import blog_services
 from app.core.database import get_db
 from sqlalchemy.orm import Session
@@ -15,13 +15,13 @@ async def create_blog(request: BlogPost, db: Session =  Depends(get_db)):
 
 
 # get all blogs
-@blog_route.get( "/", response_model=list[BlogShow], status_code=status.HTTP_200_OK)
+@blog_route.get( "/", response_model=list[ShowBlog], status_code=status.HTTP_200_OK)
 async def read_all_blogs(db : Session = Depends(get_db)):
     return blog_services.get_all_blogs(db)
 
 
 # get a blog by id
-@blog_route.get("/{blog_id}", response_model=BlogShow, status_code=status.HTTP_200_OK)
+@blog_route.get("/{blog_id}", response_model=ShowBlog, status_code=status.HTTP_200_OK)
 async def read_blog_by_id(blog_id: int, db: Session = Depends(get_db)):
     blog = blog_services.get_blog_by_id(blog_id, db)
     if not blog:
@@ -30,7 +30,7 @@ async def read_blog_by_id(blog_id: int, db: Session = Depends(get_db)):
 
 
 # update a blog
-@blog_route.put("/{blog_id}", response_model=BlogShow, status_code=status.HTTP_200_OK)
+@blog_route.put("/{blog_id}", response_model=ShowBlog, status_code=status.HTTP_200_OK)
 async def update_blog(blog_id: int, request: BlogPost, db: Session = Depends(get_db)):
     blog = blog_services.update_blog(blog_id, request, db)
     if not blog:
