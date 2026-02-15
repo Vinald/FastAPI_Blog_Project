@@ -12,5 +12,5 @@ class ShowUser(UserBase):
     model_config = ConfigDict(from_attributes=True)
 
 
-class UserPost(UserBase):
+class UserCreate(UserBase):
     password: str
