@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from app.services import user_services
-from app.schemas.user import UserCreate, ShowUser
+from app.schemas.user import UserCreate, ShowUser, ShowUserWithBlogs
 from app.core.database import get_db
 from sqlalchemy.orm import Session
 
@@ -24,8 +24,8 @@ async def read_all_users(db : Session = Depends(get_db)):
     return user_services.get_all_users(db)
 
 
-# get a user by id
-@user_route.get("/{user_id}", response_model=ShowUser, status_code=status.HTTP_200_OK)
+# get a user by id (with blogs)
+@user_route.get("/{user_id}", response_model=ShowUserWithBlogs, status_code=status.HTTP_200_OK)
 async def read_user_by_id(user_id: int, db: Session = Depends(get_db)):
     user = user_services.get_user_by_id(user_id, db)
     if not user:
