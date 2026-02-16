@@ -1,10 +1,12 @@
 from app.models.user import User
-from app.schemas.user import UserCreate, ShowUser
+from app.schemas.user import UserCreate
+from app.core.security import hash_password
 from sqlalchemy.orm import Session
 
 
 def create_user(user_data: UserCreate, db: Session):
-    new_user = User(name=user_data.name, email=user_data.email, password=user_data.password)
+    hashed_password = hash_password(user_data.password)
+    new_user = User(name=user_data.name, email=user_data.email, password=hashed_password)
     db.add(new_user)
     db.commit()
     db.refresh(new_user)
@@ -32,7 +34,7 @@ def update_user(user_id: int, user_data: UserCreate, db: Session):
     if user:
         user.name = user_data.name
         user.email = user_data.email
-        user.password = user_data.password
+        user.password = hash_password(user_data.password)
         db.commit()
         db.refresh(user)
         return user
