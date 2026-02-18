@@ -4,7 +4,7 @@ from app.core.database import Base, engine
 
 Base.metadata.create_all(bind=engine)
 
-version = 'v1.0'
+version = 'v1.1'
 description = f"API version {version} - A simple blog API built with FastAPI and SQLAlchemy"
 
 app = FastAPI(
