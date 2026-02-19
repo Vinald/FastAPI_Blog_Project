@@ -12,6 +12,7 @@ from sqlalchemy.pool import StaticPool
 
 from app.main import app, version
 from app.core.database import Base, get_db
+from app.core.security import create_access_token
 
 # API prefix - dynamically uses the version from main.py
 API_PREFIX = f"/api/{version}"
@@ -127,3 +128,71 @@ def created_user(client, sample_user_data, api_prefix):
     """
     response = client.post(f"{api_prefix}/users/", json=sample_user_data)
     return response.json()
+
+
+@pytest.fixture
+def auth_headers(client, sample_user_data, api_prefix):
+    """
+    Create a user, login, and return authorization headers with JWT token.
+
+    Usage in tests:
+        def test_protected_endpoint(client, auth_headers, api_prefix):
+            response = client.post(f"{api_prefix}/blogs/", json=data, headers=auth_headers)
+    """
+    # Create user
+    client.post(f"{api_prefix}/users/", json=sample_user_data)
+
+    # Login to get token
+    login_response = client.post(
+        f"{api_prefix}/auth/login",
+        data={"username": sample_user_data["email"], "password": sample_user_data["password"]}
+    )
+    token = login_response.json()["access_token"]
+
+    return {"Authorization": f"Bearer {token}"}
+
+
+@pytest.fixture
+def authenticated_user(client, sample_user_data, api_prefix):
+    """
+    Create a user, login, and return both user data and auth headers.
+
+    Returns:
+        dict: Contains 'user' (user data) and 'headers' (auth headers)
+    """
+    # Create user
+    user_response = client.post(f"{api_prefix}/users/", json=sample_user_data)
+    user_data = user_response.json()
+
+    # Login to get token
+    login_response = client.post(
+        f"{api_prefix}/auth/login",
+        data={"username": sample_user_data["email"], "password": sample_user_data["password"]}
+    )
+    token = login_response.json()["access_token"]
+
+    return {
+        "user": user_data,
+        "headers": {"Authorization": f"Bearer {token}"}
+    }
+
+
+def get_auth_headers_for_user(client, api_prefix, email, password):
+    """
+    Helper function to get auth headers for a specific user.
+
+    Args:
+        client: Test client
+        api_prefix: API prefix string
+        email: User's email
+        password: User's password
+
+    Returns:
+        dict: Authorization headers
+    """
+    login_response = client.post(
+        f"{api_prefix}/auth/login",
+        data={"username": email, "password": password}
+    )
+    token = login_response.json()["access_token"]
+    return {"Authorization": f"Bearer {token}"}

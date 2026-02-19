@@ -8,6 +8,88 @@ import pytest
 from fastapi import status
 
 
+class TestAuthentication:
+    """Tests for authentication endpoints."""
+
+    def test_login_success(self, client, sample_user_data, api_prefix):
+        """Test successful login returns JWT token."""
+        # Create a user
+        client.post(f"{api_prefix}/users/", json=sample_user_data)
+
+        # Login
+        response = client.post(
+            f"{api_prefix}/auth/login",
+            data={"username": sample_user_data["email"], "password": sample_user_data["password"]}
+        )
+
+        assert response.status_code == status.HTTP_200_OK
+        data = response.json()
+        assert "access_token" in data
+        assert data["token_type"] == "bearer"
+
+    def test_login_invalid_email(self, client, sample_user_data, api_prefix):
+        """Test login with invalid email fails."""
+        # Create a user
+        client.post(f"{api_prefix}/users/", json=sample_user_data)
+
+        # Try login with wrong email
+        response = client.post(
+            f"{api_prefix}/auth/login",
+            data={"username": "wrong@example.com", "password": sample_user_data["password"]}
+        )
+
+        assert response.status_code == status.HTTP_401_UNAUTHORIZED
+
+    def test_login_invalid_password(self, client, sample_user_data, api_prefix):
+        """Test login with invalid password fails."""
+        # Create a user
+        client.post(f"{api_prefix}/users/", json=sample_user_data)
+
+        # Try login with wrong password
+        response = client.post(
+            f"{api_prefix}/auth/login",
+            data={"username": sample_user_data["email"], "password": "wrongpassword"}
+        )
+
+        assert response.status_code == status.HTTP_401_UNAUTHORIZED
+
+
+class TestGetCurrentUser:
+    """Tests for GET /api/{version}/users/me endpoint."""
+
+    def test_get_current_user_success(self, client, sample_user_data, api_prefix):
+        """Test getting current user with valid token."""
+        # Create user and login
+        client.post(f"{api_prefix}/users/", json=sample_user_data)
+        login_response = client.post(
+            f"{api_prefix}/auth/login",
+            data={"username": sample_user_data["email"], "password": sample_user_data["password"]}
+        )
+        token = login_response.json()["access_token"]
+        headers = {"Authorization": f"Bearer {token}"}
+
+        # Get current user
+        response = client.get(f"{api_prefix}/users/me", headers=headers)
+
+        assert response.status_code == status.HTTP_200_OK
+        data = response.json()
+        assert data["email"] == sample_user_data["email"]
+        assert data["name"] == sample_user_data["name"]
+
+    def test_get_current_user_unauthorized(self, client, api_prefix):
+        """Test getting current user without token fails."""
+        response = client.get(f"{api_prefix}/users/me")
+
+        assert response.status_code == status.HTTP_401_UNAUTHORIZED
+
+    def test_get_current_user_invalid_token(self, client, api_prefix):
+        """Test getting current user with invalid token fails."""
+        headers = {"Authorization": "Bearer invalid_token"}
+        response = client.get(f"{api_prefix}/users/me", headers=headers)
+
+        assert response.status_code == status.HTTP_401_UNAUTHORIZED
+
+
 class TestCreateUser:
     """Tests for POST /api/{version}/users/ endpoint."""
 
@@ -108,10 +190,18 @@ class TestUpdateUser:
     """Tests for PUT /api/{version}/users/{user_id} endpoint."""
 
     def test_update_user_success(self, client, sample_user_data, api_prefix):
-        """Test successful user update."""
+        """Test successful user update (authenticated)."""
         # Create a user
         create_response = client.post(f"{api_prefix}/users/", json=sample_user_data)
         user_id = create_response.json()["id"]
+
+        # Login to get auth token
+        login_response = client.post(
+            f"{api_prefix}/auth/login",
+            data={"username": sample_user_data["email"], "password": sample_user_data["password"]}
+        )
+        token = login_response.json()["access_token"]
+        headers = {"Authorization": f"Bearer {token}"}
 
         # Update the user
         updated_data = {
@@ -119,29 +209,95 @@ class TestUpdateUser:
             "email": "updated@example.com",
             "password": "newpassword123"
         }
-        response = client.put(f"{api_prefix}/users/{user_id}", json=updated_data)
+        response = client.put(f"{api_prefix}/users/{user_id}", json=updated_data, headers=headers)
 
         assert response.status_code == status.HTTP_200_OK
         assert response.json()["name"] == updated_data["name"]
 
+    def test_update_user_unauthorized(self, client, sample_user_data, api_prefix):
+        """Test that updating a user without authentication fails."""
+        # Create a user
+        create_response = client.post(f"{api_prefix}/users/", json=sample_user_data)
+        user_id = create_response.json()["id"]
+
+        # Try to update without auth
+        updated_data = {
+            "name": "Updated Name",
+            "email": "updated@example.com",
+            "password": "newpassword123"
+        }
+        response = client.put(f"{api_prefix}/users/{user_id}", json=updated_data)
+
+        assert response.status_code == status.HTTP_401_UNAUTHORIZED
+
+    def test_update_other_user_forbidden(self, client, sample_user_data, api_prefix):
+        """Test that users cannot update other users' profiles."""
+        # Create first user
+        create_response = client.post(f"{api_prefix}/users/", json=sample_user_data)
+        user1_id = create_response.json()["id"]
+
+        # Login as first user
+        login_response = client.post(
+            f"{api_prefix}/auth/login",
+            data={"username": sample_user_data["email"], "password": sample_user_data["password"]}
+        )
+        token = login_response.json()["access_token"]
+        headers = {"Authorization": f"Bearer {token}"}
+
+        # Create second user
+        user2_data = {
+            "name": "Second User",
+            "email": "second@example.com",
+            "password": "password123"
+        }
+        create_response2 = client.post(f"{api_prefix}/users/", json=user2_data)
+        user2_id = create_response2.json()["id"]
+
+        # Try to update second user with first user's token
+        updated_data = {
+            "name": "Hacked Name",
+            "email": "hacked@example.com",
+            "password": "hackedpassword"
+        }
+        response = client.put(f"{api_prefix}/users/{user2_id}", json=updated_data, headers=headers)
+
+        assert response.status_code == status.HTTP_403_FORBIDDEN
+
     def test_update_user_not_found(self, client, sample_user_data, api_prefix):
         """Test updating a non-existent user."""
-        response = client.put(f"{api_prefix}/users/9999", json=sample_user_data)
+        # Create and login user to get token
+        client.post(f"{api_prefix}/users/", json=sample_user_data)
+        login_response = client.post(
+            f"{api_prefix}/auth/login",
+            data={"username": sample_user_data["email"], "password": sample_user_data["password"]}
+        )
+        token = login_response.json()["access_token"]
+        headers = {"Authorization": f"Bearer {token}"}
 
-        assert response.status_code == status.HTTP_404_NOT_FOUND
+        response = client.put(f"{api_prefix}/users/9999", json=sample_user_data, headers=headers)
+
+        assert response.status_code == status.HTTP_403_FORBIDDEN  # Can't update other users
 
 
 class TestDeleteUser:
     """Tests for DELETE /api/{version}/users/{user_id} endpoint."""
 
     def test_delete_user_success(self, client, sample_user_data, api_prefix):
-        """Test successful user deletion."""
+        """Test successful user deletion (authenticated)."""
         # Create a user
         create_response = client.post(f"{api_prefix}/users/", json=sample_user_data)
         user_id = create_response.json()["id"]
 
+        # Login to get auth token
+        login_response = client.post(
+            f"{api_prefix}/auth/login",
+            data={"username": sample_user_data["email"], "password": sample_user_data["password"]}
+        )
+        token = login_response.json()["access_token"]
+        headers = {"Authorization": f"Bearer {token}"}
+
         # Delete the user
-        response = client.delete(f"{api_prefix}/users/{user_id}")
+        response = client.delete(f"{api_prefix}/users/{user_id}", headers=headers)
 
         assert response.status_code in [
             status.HTTP_200_OK,
@@ -152,8 +308,53 @@ class TestDeleteUser:
         get_response = client.get(f"{api_prefix}/users/{user_id}")
         assert get_response.status_code == status.HTTP_404_NOT_FOUND
 
-    def test_delete_user_not_found(self, client, api_prefix):
-        """Test deleting a non-existent user."""
-        response = client.delete(f"{api_prefix}/users/9999")
+    def test_delete_user_unauthorized(self, client, sample_user_data, api_prefix):
+        """Test that deleting a user without authentication fails."""
+        # Create a user
+        create_response = client.post(f"{api_prefix}/users/", json=sample_user_data)
+        user_id = create_response.json()["id"]
 
-        assert response.status_code == status.HTTP_404_NOT_FOUND
+        # Try to delete without auth
+        response = client.delete(f"{api_prefix}/users/{user_id}")
+
+        assert response.status_code == status.HTTP_401_UNAUTHORIZED
+
+    def test_delete_other_user_forbidden(self, client, sample_user_data, api_prefix):
+        """Test that users cannot delete other users' accounts."""
+        # Create first user and login
+        client.post(f"{api_prefix}/users/", json=sample_user_data)
+        login_response = client.post(
+            f"{api_prefix}/auth/login",
+            data={"username": sample_user_data["email"], "password": sample_user_data["password"]}
+        )
+        token = login_response.json()["access_token"]
+        headers = {"Authorization": f"Bearer {token}"}
+
+        # Create second user
+        user2_data = {
+            "name": "Second User",
+            "email": "second@example.com",
+            "password": "password123"
+        }
+        create_response2 = client.post(f"{api_prefix}/users/", json=user2_data)
+        user2_id = create_response2.json()["id"]
+
+        # Try to delete second user with first user's token
+        response = client.delete(f"{api_prefix}/users/{user2_id}", headers=headers)
+
+        assert response.status_code == status.HTTP_403_FORBIDDEN
+
+    def test_delete_user_not_found(self, client, sample_user_data, api_prefix):
+        """Test deleting a non-existent user."""
+        # Create and login user to get token
+        client.post(f"{api_prefix}/users/", json=sample_user_data)
+        login_response = client.post(
+            f"{api_prefix}/auth/login",
+            data={"username": sample_user_data["email"], "password": sample_user_data["password"]}
+        )
+        token = login_response.json()["access_token"]
+        headers = {"Authorization": f"Bearer {token}"}
+
+        response = client.delete(f"{api_prefix}/users/9999", headers=headers)
+
+        assert response.status_code == status.HTTP_403_FORBIDDEN  # Can't delete other users
