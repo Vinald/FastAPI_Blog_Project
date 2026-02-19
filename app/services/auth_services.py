@@ -23,7 +23,7 @@ def login_user(email: str, password: str, db: Session) -> dict:
 
     access_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
     access_token = create_access_token(
-        data={"sub": user.id, "email": user.email},
+        data={"sub": str(user.id), "email": user.email},  # sub must be a string
         expires_delta=access_token_expires
     )
 

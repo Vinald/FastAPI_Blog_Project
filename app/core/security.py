@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 from app.core.config import settings
 from app.core.database import get_db
 
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1.0/auth/login")
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1.1/auth/login")
 
 
 def hash_password(password: str) -> str:
@@ -62,8 +62,13 @@ def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(
     if payload is None:
         raise credentials_exception
 
-    user_id: int = payload.get("sub")
+    user_id = payload.get("sub")
     if user_id is None:
+        raise credentials_exception
+
+    try:
+        user_id = int(user_id)
+    except (ValueError, TypeError):
         raise credentials_exception
 
     user = db.query(User).filter(User.id == user_id).first()
