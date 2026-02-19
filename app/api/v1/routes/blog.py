@@ -4,6 +4,8 @@ from fastapi.params import Body
 from app.schemas.blog import BlogPost, ShowBlog, ShowBlogWithAuthor
 from app.services import blog_services
 from app.core.database import get_db
+from app.core.security import get_current_user
+from app.models.user import User
 from sqlalchemy.orm import Session
 
 
@@ -23,7 +25,7 @@ blog_route = APIRouter(
     response_model=ShowBlog,
     status_code=status.HTTP_201_CREATED,
     summary="Create a new blog",
-    description="Create a new blog",
+    description="Create a new blog (requires authentication)",
     response_description="The created blog"
 )
 async def create_blog(
@@ -37,13 +39,16 @@ async def create_blog(
                 }
             ]
         ),
-        db: Session =  Depends(get_db)):
+        db: Session = Depends(get_db),
+        current_user: User = Depends(get_current_user)):
     """
     Create a new blog with the following information:
 
     - **title**: Title of the blog
     - **content**: Content of the blog
     - **author_id**: ID of the author (must be a valid user ID)
+
+    **Requires authentication** - Include Bearer token in Authorization header.
     """
     return blog_services.create_blog(request, db)
 
@@ -89,7 +94,7 @@ async def read_blog_by_id(blog_id: int, db: Session = Depends(get_db)):
     response_model=ShowBlog,
     status_code=status.HTTP_200_OK,
     summary="Update a blog",
-    description="Update a blog by its ID."
+    description="Update a blog by its ID (requires authentication)."
 )
 async def update_blog(
         blog_id: int,
@@ -103,13 +108,16 @@ async def update_blog(
                 }
             ]
         ),
-        db: Session = Depends(get_db)):
+        db: Session = Depends(get_db),
+        current_user: User = Depends(get_current_user)):
     """
     Update a blog by its ID with the following information:
     - **blog_id**: The ID of the blog to update
     - **title**: Updated title of the blog
     - **content**: Updated content of the blog
-    - **author_id**: Updated ID of the author (must be a valid user ID
+    - **author_id**: Updated ID of the author (must be a valid user ID)
+
+    **Requires authentication** - Include Bearer token in Authorization header.
     """
     blog = blog_services.update_blog(blog_id, request, db)
     if not blog:
@@ -122,7 +130,7 @@ async def update_blog(
     "/{blog_id}",
     status_code=status.HTTP_200_OK,
     summary="Delete a blog",
-    description="Delete a blog by its ID.",
+    description="Delete a blog by its ID (requires authentication).",
     responses = {
         200: {
             "description": "Blog deleted successfully",
@@ -134,10 +142,15 @@ async def update_blog(
         }
     }
 )
-async def delete_blog(blog_id: int, db: Session = Depends(get_db)):
+async def delete_blog(
+        blog_id: int,
+        db: Session = Depends(get_db),
+        current_user: User = Depends(get_current_user)):
     """
     Delete a blog by its ID.
     - **blog_id**: The ID of the blog to delete
+
+    **Requires authentication** - Include Bearer token in Authorization header.
     """
     deleted = blog_services.delete_blog(blog_id, db)
     if not deleted:

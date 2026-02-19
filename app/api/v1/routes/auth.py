@@ -1,7 +1,9 @@
-from fastapi import APIRouter, Depends
-from app.schemas.auth import  LoginRequest
+from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi.security import OAuth2PasswordRequestForm
+from app.schemas.auth import Token
 from app.core.database import get_db
 from sqlalchemy.orm import Session
+from app.services.auth_services import login_user
 
 
 auth_route = APIRouter(
@@ -16,12 +18,27 @@ auth_route = APIRouter(
 
 @auth_route.post(
     "/login",
+    response_model=Token,
     summary="User login",
-    description="Authenticate a user and return an access token.",
-    response_description="Access token for authenticated user"
+    description="Authenticate a user and return a JWT access token.",
+    response_description="JWT access token for authenticated user"
 )
-async def login(request: LoginRequest, db: Session = Depends(get_db)):
+async def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
     """
-    Authenticate a user with their email and password. If the credentials are valid, an access token will be returned.
+    Authenticate a user with their email and password.
+
+    - **username**: User's email address
+    - **password**: User's password
+
+    Returns a JWT access token if credentials are valid.
     """
-    return {"message": "Login endpoint - to be implemented"}
+    result = login_user(form_data.username, form_data.password, db)
+
+    if not result.get("success"):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail=result.get("message", "Invalid credentials"),
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    return Token(access_token=result["access_token"], token_type=result["token_type"])

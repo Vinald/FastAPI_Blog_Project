@@ -2,6 +2,8 @@ from fastapi import APIRouter, Depends, HTTPException, status, Body
 from app.services import user_services
 from app.schemas.user import UserCreate, ShowUser, ShowUserWithBlogs
 from app.core.database import get_db
+from app.core.security import get_current_user
+from app.models.user import User
 from sqlalchemy.orm import Session
 
 
@@ -13,6 +15,23 @@ user_route = APIRouter(
         500: {"description": "Internal server error"}
     }
 )
+
+
+# get current authenticated user
+@user_route.get(
+    "/me",
+    response_model=ShowUserWithBlogs,
+    status_code=status.HTTP_200_OK,
+    summary="Get current user",
+    description="Get the currently authenticated user's profile."
+)
+async def get_me(current_user: User = Depends(get_current_user)):
+    """
+    Get the currently authenticated user's profile.
+
+    **Requires authentication** - Include Bearer token in Authorization header.
+    """
+    return current_user
 
 
 # create a user
@@ -132,7 +151,7 @@ async def read_user_by_username(username: str, db: Session = Depends(get_db)):
     response_model=ShowUser,
     status_code=status.HTTP_200_OK,
     summary="Update a user",
-    description="Update an existing user's information."
+    description="Update an existing user's information (requires authentication, can only update own profile)."
 )
 async def update_user(
     user_id: int,
@@ -146,7 +165,8 @@ async def update_user(
             }
         ]
     ),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
 ):
     """
     Update a user's information.
@@ -155,7 +175,16 @@ async def update_user(
     - **name**: New name for the user
     - **email**: New email for the user
     - **password**: New password (will be hashed)
+
+    **Requires authentication** - Users can only update their own profile.
     """
+    # Check if user is updating their own profile
+    if current_user.id != user_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You can only update your own profile"
+        )
+
     user = user_services.update_user(user_id, request, db)
     if not user:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"User with id {user_id} not found")
@@ -167,7 +196,7 @@ async def update_user(
     "/{user_id}",
     status_code=status.HTTP_200_OK,
     summary="Delete a user",
-    description="Delete a user from the database.",
+    description="Delete a user from the database (requires authentication, can only delete own account).",
     responses={
         200: {
             "description": "User deleted successfully",
@@ -179,12 +208,25 @@ async def update_user(
         }
     }
 )
-async def delete_user(user_id: int, db: Session = Depends(get_db)):
+async def delete_user(
+    user_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
     """
     Delete a user by their ID.
 
     - **user_id**: The unique identifier of the user to delete
+
+    **Requires authentication** - Users can only delete their own account.
     """
+    # Check if user is deleting their own account
+    if current_user.id != user_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You can only delete your own account"
+        )
+
     deleted = user_services.delete_user(user_id, db)
     if not deleted:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"User with id {user_id} not found")
